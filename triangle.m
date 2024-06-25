@@ -33,7 +33,10 @@ static const simd_float2 positions[] = {
 };
 static const simd_float3 colors[] = {
     {1.0, 0.0, 0.0},
+    {0.0, 0.0, 1.0},
     {0.0, 1.0, 0.0},
+    {0.0, 0.0, 1.0},
+    {0.0, 0.0, 1.0},
     {0.0, 0.0, 1.0},
 };
 
