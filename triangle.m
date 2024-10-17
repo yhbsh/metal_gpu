@@ -8,10 +8,9 @@ int main(int argc, const char *argv[]) {
     [app setActivationPolicy:NSApplicationActivationPolicyRegular];
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 600)
-                                                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+                                                   styleMask:NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
-    [window setTitle:@"Cube"];
     [window makeKeyAndOrderFront:nil];
     [window center];
     [app activateIgnoringOtherApps:YES];
@@ -20,28 +19,14 @@ int main(int argc, const char *argv[]) {
     [window.contentView setLayer:layer];
     [window.contentView setWantsLayer:YES];
 
-    NSMenu *menu     = [[NSMenu alloc] init];
-    NSMenuItem *item = [[NSMenuItem alloc] init];
-    [menu addItem:item];
-    [app setMainMenu:menu];
-
-    NSMenu *appMenu      = [[NSMenu alloc] init];
-    NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
-    [appMenu addItem:quitItem];
-    [item setSubmenu:appMenu];
-
     // clang-format off
-        static const float positions[] = {
-            +0.0f, +0.5f, +0.0f,
-            -0.5f, -0.5f, +0.0f, 
-            +0.5f, -0.5f, +0.0f,
-        };
+    static const float vertexData[] = {
+        // Position          // Color
+        +0.0f, +0.5f, +0.0f,  +1.0f, +0.0f, +0.0f,
+        -0.5f, -0.5f, +0.0f,  +0.0f, +1.0f, +0.0f,
+        +0.5f, -0.5f, +0.0f,  +0.0f, +0.0f, +1.0f,
+    };
 
-        static const float colors[] = {
-            +1.0f, +0.0f, +0.0f,
-            +0.0f, +1.0f, +0.0f,
-            +0.0f, +0.0f, +1.0f,
-        };
     // clang-format on
 
     id<MTLDevice> device  = MTLCreateSystemDefaultDevice();
@@ -87,16 +72,12 @@ int main(int argc, const char *argv[]) {
     vertexDescriptor.attributes[0].bufferIndex = 0;
 
     vertexDescriptor.attributes[1].format      = MTLVertexFormatFloat3;
-    vertexDescriptor.attributes[1].offset      = 0;
-    vertexDescriptor.attributes[1].bufferIndex = 1;
+    vertexDescriptor.attributes[1].offset      = 3 * sizeof(float);
+    vertexDescriptor.attributes[1].bufferIndex = 0;
 
-    vertexDescriptor.layouts[0].stride       = 3 * sizeof(float);
-    vertexDescriptor.layouts[0].stepRate     = 1;
+    vertexDescriptor.layouts[0].stride       = 6 * sizeof(float);
     vertexDescriptor.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-
-    vertexDescriptor.layouts[1].stride       = 3 * sizeof(float);
-    vertexDescriptor.layouts[1].stepRate     = 1;
-    vertexDescriptor.layouts[1].stepFunction = MTLVertexStepFunctionPerVertex;
+    vertexDescriptor.layouts[0].stepRate     = 1;
 
     renderPipelineDescriptor.vertexDescriptor = vertexDescriptor;
 
@@ -106,8 +87,11 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
-    id<MTLBuffer> positionsBuff = [device newBufferWithBytes:positions length:sizeof(positions) options:MTLResourceStorageModeShared];
-    id<MTLBuffer> colorsBuff    = [device newBufferWithBytes:colors length:sizeof(colors) options:MTLResourceStorageModeShared];
+    id<MTLBuffer> vertexBuffer = [device newBufferWithBytes:vertexData length:sizeof(vertexData) options:MTLResourceStorageModeShared];
+    if (!vertexBuffer) {
+        NSLog(@"cannot create vertex buffer %@", error);
+        return 1;
+    }
 
     id<MTLCommandQueue> commandQueue = [device newCommandQueue];
     if (!commandQueue) {
@@ -115,37 +99,36 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
-    while (true) {
-        @autoreleasepool {
-
-            id<CAMetalDrawable> drawable = [layer nextDrawable];
-            if (!drawable) continue;
-
-            id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-
-            MTLRenderPassDescriptor *renderPassDescriptor       = [MTLRenderPassDescriptor renderPassDescriptor];
-            renderPassDescriptor.colorAttachments[0].texture    = drawable.texture;
-            renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-            renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
-
-            id<MTLRenderCommandEncoder> renderCommandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-
-            [renderCommandEncoder setRenderPipelineState:pipelineState];
-            [renderCommandEncoder setVertexBuffer:positionsBuff offset:0 atIndex:0];
-            [renderCommandEncoder setVertexBuffer:colorsBuff offset:0 atIndex:1];
-
-            [renderCommandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-            [renderCommandEncoder endEncoding];
-
-            [commandBuffer presentDrawable:drawable];
-            [commandBuffer commit];
-
-            NSEvent *event;
-            while ((event = [app nextEventMatchingMask:NSEventMaskAny untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES])) {
-                [app sendEvent:event];
-                [app updateWindows];
-            }
+    BOOL quit = NO;
+    while (!quit) {
+        NSEvent *event;
+        while ((event = [app nextEventMatchingMask:NSEventMaskAny untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES])) {
+            [app sendEvent:event];
+            [app updateWindows];
+            if ([event type] == NSEventTypeKeyDown && [event keyCode] == 12) quit = YES;
         }
+
+        id<CAMetalDrawable> drawable = [layer nextDrawable];
+        if (!drawable) continue;
+
+        MTLRenderPassDescriptor *renderPassDescriptor       = [MTLRenderPassDescriptor renderPassDescriptor];
+        renderPassDescriptor.colorAttachments[0].texture    = drawable.texture;
+        renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
+
+        id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+
+        id<MTLRenderCommandEncoder> renderCommandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+
+        [renderCommandEncoder setRenderPipelineState:pipelineState];
+        [renderCommandEncoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+
+        [renderCommandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+        [renderCommandEncoder endEncoding];
+
+        [commandBuffer presentDrawable:drawable];
+        [commandBuffer commit];
     }
+
     return 0;
 }
