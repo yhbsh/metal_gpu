@@ -7,32 +7,41 @@ struct VertexOut {
 };
 
 vertex VertexOut vertex_cube_main(uint                 id        [[vertex_id]], 
-                             const device float4 *positions [[buffer(0)]],
-                             const device float4 *colors    [[buffer(1)]],
-                             const device float  &time      [[buffer(2)]]) {
+                                  const device float4 *positions [[buffer(0)]],
+                                  const device float4 *colors    [[buffer(1)]],
+                                  constant float      &angle     [[buffer(2)]]) {
     VertexOut vout;
 
-    float angleX = time;
-    float angleY = pow(time * 0.5, 1.5);
+    const float PI = 3.1415926535897932384626433832795;
+    float theta = fmod(angle, PI);
 
-    float4x4 rotationX = float4x4(
-        float4(+1.0, +0.0        , +0.0        , +0.0),
-        float4(+0.0, +cos(angleX), -sin(angleX), +0.0),
-        float4(+0.0, +sin(angleX), +cos(angleX), +0.0),
-        float4(+0.0, +0.0        , +0.0        , +1.0)
+    //float4x4 rotateX = float4x4(
+    //    float4(+1.0, +0.0,        +0.0,         +0.0),
+    //    float4(+0.0, +cos(theta), -sin(theta), +0.0),
+    //    float4(+0.0, +sin(theta), +cos(theta), +0.0),
+    //    float4(+0.0, +0.0,        +0.0,         +1.0)
+    //);
+
+    //float4x4 rotateY = float4x4(
+    //    float4(+cos(theta), +0.0, +sin(theta), +0.0),
+    //    float4(+0.0,        +1.0, +0.0,         +0.0),
+    //    float4(-sin(theta), +0.0, +cos(theta), +0.0),
+    //    float4(+0.0,        +0.0, +0.0,         +1.0)
+    //);
+
+    float4x4 rotateZ = float4x4(
+        float4(+cos(theta), -sin(theta), +0.0, +0.0),
+        float4(+sin(theta), +cos(theta), +0.0, +0.0),
+        float4(+0.0,        +0.0,        +1.0, +0.0),
+        float4(+0.0,        +0.0,        +0.0, +1.0)
     );
 
-    float4x4 rotationY = float4x4(
-        float4(+cos(angleY), +0.0, +sin(angleY), +0.0),
-        float4(+0.0        , +1.0, +0.0        , +0.0),
-        float4(-sin(angleY), +0.0, +cos(angleY), +0.0),
-        float4(+0.0        , +0.0, +0.0        , +1.0)
-    );
-
-    float4x4 matrix = rotationY * rotationX;
+    //float4x4 matrix = rotateZ * rotateY * rotateX;
+    float4x4 matrix = rotateZ;
 
     vout.position = matrix * positions[id];
-    vout.color = colors[id];
+    vout.color = colors[id / 4];
+
     return vout;
 }
 
@@ -50,8 +59,13 @@ vertex VertexOutTriangle vertex_triangle_main(uint                 id        [[v
                              const device float3 *colors    [[buffer(1)]],
                              const device float  &time      [[buffer(2)]]) {
     VertexOutTriangle vout;
-    float angle = pow(time, 2.0);
-    float4x4 rotation = float4x4(cos(angle), -sin(angle), 0.0, 0.0, sin(angle), cos(angle), 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    float angle = 4 * sin(time);
+    float4x4 rotation = float4x4(
+        +cos(angle), -sin(angle), +0.0, +0.0,
+        +sin(angle), +cos(angle), +0.0, +0.0, 
+        +0.0,        +0.0,        +1.0, +0.0, 
+        +0.0,        +0.0,        +0.0, +1.0
+    );
     vout.position = rotation * float4(positions[id] + float2(0.0, 0.1), 0.0, 1.0);
     vout.color = colors[id];
     return vout;
