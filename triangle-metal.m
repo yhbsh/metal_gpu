@@ -1,131 +1,152 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <simd/simd.h>
 
-@interface AppDelegate : NSObject <NSApplicationDelegate>
-@property(strong, nonatomic) NSWindow *window;
-@property(strong, nonatomic) id<MTLDevice> metalDevice;
-@property(strong, nonatomic) CAMetalLayer *metalLayer;
-@property(strong, nonatomic) id<MTLRenderPipelineState> pipelineState;
-@property(strong, nonatomic) id<MTLCommandQueue> commandQueue;
+@interface MetalView : NSView
 @end
 
-@implementation AppDelegate
+@implementation MetalView
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-  self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
-                                            styleMask:(NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable)
-                                              backing:NSBackingStoreBuffered
-                                                defer:NO];
-  [self.window setTitle:@"Metal Basic Example"];
-  [self.window makeKeyAndOrderFront:nil];
-  [self.window center];
+CAMetalLayer              *_metalLayer;
+id<MTLDevice>              _device;
+id<MTLCommandQueue>        _commandQueue;
+id<MTLRenderPipelineState> _pipelineState;
+id<MTLBuffer>              _vertexBuffer;
+NSTimer                   *_timer;
+CFTimeInterval             _time;
 
-  [self setupMetal];
-  [self setupPipeline];
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) {
+        return nil;
+    }
 
-  [self redraw];
-  [self setupMenu];
+    _time = CACurrentMediaTime();
+
+    // metal
+    _device                 = MTLCreateSystemDefaultDevice();
+    _metalLayer             = [CAMetalLayer layer];
+    _metalLayer.device      = _device;
+    _metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    self.layer              = _metalLayer;
+    _metalLayer.frame       = self.bounds;
+    _commandQueue           = [_device newCommandQueue];
+
+    // pipeline
+    id<MTLLibrary>  library      = [_device newLibraryWithURL:[[NSURL alloc] initWithString:@"./shaders.metallib"] error:nil];
+    id<MTLFunction> vertFunction = [library newFunctionWithName:@"vert_main"];
+    id<MTLFunction> fragFunction = [library newFunctionWithName:@"frag_main"];
+
+    MTLRenderPipelineDescriptor *pipelineDescriptor    = [[MTLRenderPipelineDescriptor alloc] init];
+    pipelineDescriptor.label                           = @"Pipeline Descriptor";
+    pipelineDescriptor.vertexFunction                  = vertFunction;
+    pipelineDescriptor.fragmentFunction                = fragFunction;
+    pipelineDescriptor.colorAttachments[0].pixelFormat = _metalLayer.pixelFormat;
+    pipelineDescriptor.rasterSampleCount               = 4;
+
+    MTLVertexDescriptor *vertexDescriptor      = [[MTLVertexDescriptor alloc] init];
+    vertexDescriptor.attributes[0].format      = MTLVertexFormatFloat2;
+    vertexDescriptor.attributes[0].offset      = 0;
+    vertexDescriptor.attributes[0].bufferIndex = 0;
+    vertexDescriptor.attributes[1].format      = MTLVertexFormatFloat3;
+    vertexDescriptor.attributes[1].offset      = 2 * sizeof(float);
+    vertexDescriptor.attributes[1].bufferIndex = 0;
+    vertexDescriptor.layouts[0].stride         = 5 * sizeof(float);
+    vertexDescriptor.layouts[0].stepRate       = 1;
+    vertexDescriptor.layouts[0].stepFunction   = MTLVertexStepFunctionPerVertex;
+
+    pipelineDescriptor.vertexDescriptor = vertexDescriptor;
+    _pipelineState                      = [_device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:nil];
+
+    static const float vertexData[] = {
+        -0.3f,
+        -0.3f,
+        +1.0f,
+        +0.0f,
+        +0.0f,
+
+        +0.3f,
+        -0.3f,
+        +0.0f,
+        +1.0f,
+        +0.0f,
+
+        +0.0f,
+        +0.3f,
+        +0.0f,
+        +0.0f,
+        +1.0f,
+    };
+    _vertexBuffer = [_device newBufferWithBytes:vertexData length:sizeof(vertexData) options:MTLResourceStorageModeShared];
+    _timer        = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
+    return self;
 }
 
-- (void)setupMetal {
-  self.metalDevice = MTLCreateSystemDefaultDevice();
-  self.metalLayer = [CAMetalLayer layer];
-  self.metalLayer.device = self.metalDevice;
-  self.metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-  self.metalLayer.framebufferOnly = YES;
-  self.metalLayer.frame = [self.window.contentView bounds];
-  [self.window.contentView setLayer:self.metalLayer];
-  [self.window.contentView setWantsLayer:YES];
-  self.commandQueue = [self.metalDevice newCommandQueue];
-}
+- (void)render {
+    CFTimeInterval currentTime = CACurrentMediaTime();
+    float          elapsedTime = currentTime - _time;
 
-- (void)setupPipeline {
-  NSError *error = nil;
-  NSURL *url = [[NSBundle mainBundle] URLForResource:@"shaders" withExtension:@"metallib"];
-  id<MTLLibrary> library = [self.metalDevice newLibraryWithURL:url error:&error];
-  if (!library) {
-    NSLog(@"Error loading metal library: %@", error);
-    return;
-  }
+    id<CAMetalDrawable>  drawable      = [_metalLayer nextDrawable];
+    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
 
-  id<MTLFunction> vertexFunction = [library newFunctionWithName:@"vertexShader"];
-  id<MTLFunction> fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
+    MTLTextureDescriptor *msaaTextureDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:_metalLayer.pixelFormat
+                                                                                                     width:drawable.texture.width
+                                                                                                    height:drawable.texture.height
+                                                                                                 mipmapped:NO];
+    msaaTextureDescriptor.textureType           = MTLTextureType2DMultisample;
+    msaaTextureDescriptor.sampleCount           = 4;
+    msaaTextureDescriptor.usage                 = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    msaaTextureDescriptor.storageMode           = MTLStorageModePrivate;
+    id<MTLTexture> msaaTexture                  = [_device newTextureWithDescriptor:msaaTextureDescriptor];
 
-  MTLVertexDescriptor *vertexDescriptor = [[MTLVertexDescriptor alloc] init];
-  vertexDescriptor.attributes[0].format = MTLVertexFormatFloat3;
-  vertexDescriptor.attributes[0].offset = 0;
-  vertexDescriptor.attributes[0].bufferIndex = 0;
-  vertexDescriptor.layouts[0].stride = sizeof(float) * 3;
-  vertexDescriptor.layouts[0].stepRate = 1;
-  vertexDescriptor.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+    MTLRenderPassDescriptor *renderPassDescriptor           = [MTLRenderPassDescriptor renderPassDescriptor];
+    renderPassDescriptor.colorAttachments[0].texture        = msaaTexture;
+    renderPassDescriptor.colorAttachments[0].resolveTexture = drawable.texture;
+    renderPassDescriptor.colorAttachments[0].loadAction     = MTLLoadActionClear;
+    renderPassDescriptor.colorAttachments[0].clearColor     = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
+    renderPassDescriptor.colorAttachments[0].storeAction    = MTLStoreActionMultisampleResolve;
 
-  MTLRenderPipelineDescriptor *pipelineDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
-  pipelineDescriptor.vertexFunction = vertexFunction;
-  pipelineDescriptor.fragmentFunction = fragmentFunction;
-  pipelineDescriptor.vertexDescriptor = vertexDescriptor;
-  pipelineDescriptor.colorAttachments[0].pixelFormat = self.metalLayer.pixelFormat;
+    id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+    [renderEncoder setRenderPipelineState:_pipelineState];
+    [renderEncoder setVertexBuffer:_vertexBuffer offset:0 atIndex:0];
 
-  self.pipelineState = [self.metalDevice newRenderPipelineStateWithDescriptor:pipelineDescriptor error:&error];
-  if (!self.pipelineState) {
-    NSLog(@"Failed to create pipeline state: %@", error);
-  }
-}
+    id<MTLBuffer> timeBuffer = [_device newBufferWithBytes:&elapsedTime length:sizeof(elapsedTime) options:MTLResourceStorageModeShared];
+    [renderEncoder setVertexBuffer:timeBuffer offset:0 atIndex:1];
 
-- (void)redraw {
-  id<CAMetalDrawable> drawable = [self.metalLayer nextDrawable];
-  if (!drawable) {
-    return;
-  }
+    [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+    [renderEncoder endEncoding];
 
-  MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
-  passDescriptor.colorAttachments[0].texture = drawable.texture;
-  passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-  passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1);
-  passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-  id<MTLCommandBuffer> commandBuffer = [self.commandQueue commandBuffer];
-  id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
-
-  float vertexData[] = {
-      0.0f, 1.0f, 0.0f, -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f,
-  };
-  NSUInteger vertexDataSize = sizeof(vertexData);
-  id<MTLBuffer> vertexBuffer = [self.metalDevice newBufferWithBytes:vertexData length:vertexDataSize options:MTLResourceStorageModeShared];
-  [commandEncoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-
-  [commandEncoder setRenderPipelineState:self.pipelineState];
-  [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-  [commandEncoder endEncoding];
-
-  [commandBuffer presentDrawable:drawable];
-  [commandBuffer commit];
-}
-
-- (void)setupMenu {
-  NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@""];
-  NSMenuItem *itemApp = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
-  [mainMenu addItem:itemApp];
-
-  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Application"];
-  NSString *name = [[NSProcessInfo processInfo] processName];
-  NSString *title = [NSString stringWithFormat:@"Quit %@", name];
-  NSMenuItem *itemQuit = [[NSMenuItem alloc] initWithTitle:title action:@selector(terminate:) keyEquivalent:@"q"];
-  [menu addItem:itemQuit];
-  [itemApp setSubmenu:menu];
-
-  [NSApp setMainMenu:mainMenu];
+    [commandBuffer presentDrawable:drawable];
+    [commandBuffer commit];
 }
 
 @end
 
-int main(int argc, char *argv[]) {
-  @autoreleasepool {
-    NSApplication *app = [NSApplication sharedApplication];
-    AppDelegate *delegate = [[AppDelegate alloc] init];
-    app.delegate = delegate;
-    [app setActivationPolicy:NSApplicationActivationPolicyRegular];
-    [app run];
-  }
-  return 0;
+int main(int argc, const char *argv[]) {
+    @autoreleasepool {
+        NSApplication *app = [NSApplication sharedApplication];
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        NSMenu     *menu = [[NSMenu alloc] init];
+        NSMenuItem *item = [[NSMenuItem alloc] init];
+        [menu addItem:item];
+        [NSApp setMainMenu:menu];
+
+        NSMenu     *appMenu      = [[NSMenu alloc] init];
+        NSString   *quitTitle    = [NSString stringWithFormat:@"Quit %@", [[NSProcessInfo processInfo] processName]];
+        NSMenuItem *quitMenuItem = [[NSMenuItem alloc] initWithTitle:quitTitle action:@selector(terminate:) keyEquivalent:@"q"];
+        [appMenu addItem:quitMenuItem];
+        [item setSubmenu:appMenu];
+
+        NSWindow  *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 600, 600) styleMask:NSWindowStyleMaskClosable | NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
+        MetalView *view   = [[MetalView alloc] initWithFrame:window.contentView.bounds];
+        [window setContentView:view];
+        [window makeKeyAndOrderFront:nil];
+        [window center];
+
+        [NSApp activateIgnoringOtherApps:YES];
+        [NSApp run];
+    }
+    return 0;
 }
