@@ -45,41 +45,10 @@ CFTimeInterval             _time;
     pipelineDescriptor.colorAttachments[0].pixelFormat = _metalLayer.pixelFormat;
     pipelineDescriptor.rasterSampleCount               = 4;
 
-    MTLVertexDescriptor *vertexDescriptor      = [[MTLVertexDescriptor alloc] init];
-    vertexDescriptor.attributes[0].format      = MTLVertexFormatFloat2;
-    vertexDescriptor.attributes[0].offset      = 0;
-    vertexDescriptor.attributes[0].bufferIndex = 0;
-    vertexDescriptor.attributes[1].format      = MTLVertexFormatFloat3;
-    vertexDescriptor.attributes[1].offset      = 2 * sizeof(float);
-    vertexDescriptor.attributes[1].bufferIndex = 0;
-    vertexDescriptor.layouts[0].stride         = 5 * sizeof(float);
-    vertexDescriptor.layouts[0].stepRate       = 1;
-    vertexDescriptor.layouts[0].stepFunction   = MTLVertexStepFunctionPerVertex;
-
-    pipelineDescriptor.vertexDescriptor = vertexDescriptor;
-    _pipelineState                      = [_device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:nil];
-
-    static const float vertexData[] = {
-        -0.3f,
-        -0.3f,
-        +1.0f,
-        +0.0f,
-        +0.0f,
-
-        +0.3f,
-        -0.3f,
-        +0.0f,
-        +1.0f,
-        +0.0f,
-
-        +0.0f,
-        +0.3f,
-        +0.0f,
-        +0.0f,
-        +1.0f,
-    };
-    _vertexBuffer = [_device newBufferWithBytes:vertexData length:sizeof(vertexData) options:MTLResourceStorageModeShared];
-    _timer        = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
+    _pipelineState                  = [_device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:nil];
+    static const float vertexData[] = {-0.3f, -0.3f, +1.0f, +0.0f, +0.0f, +0.3f, -0.3f, +0.0f, +1.0f, +0.0f, +0.0f, +0.3f, +0.0f, +0.0f, +1.0f};
+    _vertexBuffer                   = [_device newBufferWithBytes:vertexData length:sizeof(vertexData) options:MTLResourceStorageModeShared];
+    _timer                          = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
     return self;
 }
 
