@@ -34,9 +34,30 @@ int main() {
     id<MTLRenderPipelineState> pipelineState = [gpu newRenderPipelineStateWithDescriptor:pipelineDescriptor error:nil];
     id<MTLCommandQueue> commandQueue = [gpu newCommandQueue];
 
+#if 1
     NSString *imagePath = [[NSBundle mainBundle] pathForResource:@"image" ofType:@"jpg"];
     MTKTextureLoader *textureLoader = [[MTKTextureLoader alloc] initWithDevice:gpu];
     id<MTLTexture> texture = [textureLoader newTextureWithContentsOfURL:[NSURL fileURLWithPath:imagePath] options:nil error:nil];
+#else
+    NSUInteger w = 256;
+    NSUInteger h = 256;
+    MTLPixelFormat pixelFormat = MTLPixelFormatRGBA8Unorm;
+    NSUInteger dataSize = w * h * 4;
+    uint8_t *rawData = malloc(dataSize);
+    for (NSUInteger y = 0; y < h; y++) {
+        for (NSUInteger x = 0; x < w; x++) {
+            size_t index = (y * w+ x) * 4;
+            rawData[index+0] = (uint8_t)(x % 256); // Red channel
+            rawData[index+1] = (uint8_t)(y % 256); // Green channel
+            rawData[index+2] = 0;                  // Blue channel
+            rawData[index+3] = 255;                // Alpha channel
+        }
+    }
+    id<MTLBuffer> buffer = [gpu newBufferWithBytes:rawData length:dataSize options:MTLResourceStorageModeManaged];
+    free(rawData);
+    MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat width:w height:h mipmapped:NO];
+    id<MTLTexture> texture = [buffer newTextureWithDescriptor:descriptor offset:0 bytesPerRow:w * 4];
+#endif
 
     BOOL quit = NO;
     while (!quit) {
