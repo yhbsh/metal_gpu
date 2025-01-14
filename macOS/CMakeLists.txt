@@ -3,9 +3,9 @@ project(Main VERSION 1.0 LANGUAGES C OBJC)
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 
-set(METAL_FILE "${CMAKE_CURRENT_SOURCE_DIR}/Shaders.metal")
-set(AIR_FILE "${CMAKE_CURRENT_BINARY_DIR}/Shaders.air")
-set(LIB_FILE "${CMAKE_CURRENT_BINARY_DIR}/Shaders.metallib")
+set(METAL_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/shaders.metal")
+set(AIR_FILE "${CMAKE_CURRENT_BINARY_DIR}/../shaders/shaders.air")
+set(LIB_FILE "${CMAKE_CURRENT_BINARY_DIR}/../shaders/shaders.metallib")
 
 add_custom_command(
     OUTPUT ${AIR_FILE}
@@ -21,7 +21,7 @@ add_custom_command(
     VERBATIM
 )
 
-set(SOURCE_FILES triangle.m)
+set(SOURCE_FILES ../triangle-metal.m)
 add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCE_FILES})
 
 find_library(COCOA_LIBRARY Cocoa)

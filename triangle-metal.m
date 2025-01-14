@@ -42,7 +42,7 @@
 
 - (void)setupPipeline {
   NSError *error = nil;
-  NSURL *url = [[NSBundle mainBundle] URLForResource:@"Shaders" withExtension:@"metallib"];
+  NSURL *url = [[NSBundle mainBundle] URLForResource:@"shaders" withExtension:@"metallib"];
   id<MTLLibrary> library = [self.metalDevice newLibraryWithURL:url error:&error];
   if (!library) {
     NSLog(@"Error loading metal library: %@", error);
