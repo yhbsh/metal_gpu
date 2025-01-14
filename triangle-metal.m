@@ -13,6 +13,7 @@ id<MTLDevice>              _device;
 id<MTLCommandQueue>        _commandQueue;
 id<MTLRenderPipelineState> _pipelineState;
 id<MTLBuffer>              _vertexBuffer;
+id<MTLBuffer>              _timeBuffer;
 NSTimer                   *_timer;
 CFTimeInterval             _time;
 
@@ -24,17 +25,14 @@ CFTimeInterval             _time;
 
     _time = CACurrentMediaTime();
 
-    // metal
     _device                 = MTLCreateSystemDefaultDevice();
     _metalLayer             = [CAMetalLayer layer];
     _metalLayer.device      = _device;
     _metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     self.layer              = _metalLayer;
-    _metalLayer.frame       = self.bounds;
     _commandQueue           = [_device newCommandQueue];
 
-    // pipeline
-    id<MTLLibrary>  library      = [_device newLibraryWithURL:[[NSURL alloc] initWithString:@"./shaders.metallib"] error:nil];
+    id<MTLLibrary>  library      = [_device newLibraryWithURL:[[NSURL alloc] initWithString:@"shaders.metallib"] error:nil];
     id<MTLFunction> vertFunction = [library newFunctionWithName:@"vert_main"];
     id<MTLFunction> fragFunction = [library newFunctionWithName:@"frag_main"];
 
@@ -80,8 +78,8 @@ CFTimeInterval             _time;
     [renderEncoder setRenderPipelineState:_pipelineState];
     [renderEncoder setVertexBuffer:_vertexBuffer offset:0 atIndex:0];
 
-    id<MTLBuffer> timeBuffer = [_device newBufferWithBytes:&elapsedTime length:sizeof(elapsedTime) options:MTLResourceStorageModeShared];
-    [renderEncoder setVertexBuffer:timeBuffer offset:0 atIndex:1];
+    _timeBuffer = [_device newBufferWithBytes:&elapsedTime length:sizeof(elapsedTime) options:MTLResourceStorageModeShared];
+    [renderEncoder setVertexBuffer:_timeBuffer offset:0 atIndex:1];
 
     [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
     [renderEncoder endEncoding];
