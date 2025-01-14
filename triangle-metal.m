@@ -1,21 +1,28 @@
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
-#import <QuartzCore/CAMetalLayer.h>
-#import <simd/simd.h>
+#import <QuartzCore/QuartzCore.h>
 
 @interface MetalView : NSView
 @end
 
 @implementation MetalView
 
-CAMetalLayer              *_metalLayer;
-id<MTLDevice>              _device;
-id<MTLCommandQueue>        _commandQueue;
-id<MTLRenderPipelineState> _pipelineState;
-id<MTLBuffer>              _vertexBuffer;
-id<MTLBuffer>              _timeBuffer;
-NSTimer                   *_timer;
-CFTimeInterval             _time;
+id<MTLDevice>                _gpu;
+id<MTLCommandQueue>          _commandQueue;
+id<MTLRenderPipelineState>   _pipelineState;
+id<MTLBuffer>                _vertBuffer;
+id<MTLBuffer>                _timeBuffer;
+id<MTLLibrary>               _library;
+id<MTLFunction>              _vertFunction;
+id<MTLFunction>              _fragFunction;
+id<CAMetalDrawable>          _drawable;
+id<MTLCommandBuffer>         _commandBuffer;
+id<MTLRenderCommandEncoder>  _renderEncoder;
+CAMetalLayer                *_layer;
+NSTimer                     *_timer;
+CFTimeInterval               _time;
+MTLRenderPipelineDescriptor *_renderPipelineDescriptor;
+MTLRenderPassDescriptor     *_renderPassDescriptor;
 
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
@@ -25,67 +32,53 @@ CFTimeInterval             _time;
 
     _time = CACurrentMediaTime();
 
-    _device                 = MTLCreateSystemDefaultDevice();
-    _metalLayer             = [CAMetalLayer layer];
-    _metalLayer.device      = _device;
-    _metalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-    self.layer              = _metalLayer;
-    _commandQueue           = [_device newCommandQueue];
+    _gpu          = MTLCreateSystemDefaultDevice();
+    _layer        = [CAMetalLayer layer];
+    _layer.device = _gpu;
+    _commandQueue = [_gpu newCommandQueue];
+    self.layer    = _layer;
 
-    id<MTLLibrary>  library      = [_device newLibraryWithURL:[[NSURL alloc] initWithString:@"shaders.metallib"] error:nil];
-    id<MTLFunction> vertFunction = [library newFunctionWithName:@"vert_main"];
-    id<MTLFunction> fragFunction = [library newFunctionWithName:@"frag_main"];
+    _library      = [_gpu newLibraryWithURL:[[NSURL alloc] initWithString:@"shaders.metallib"] error:nil];
+    _vertFunction = [_library newFunctionWithName:@"vert_main"];
+    _fragFunction = [_library newFunctionWithName:@"frag_main"];
 
-    MTLRenderPipelineDescriptor *pipelineDescriptor    = [[MTLRenderPipelineDescriptor alloc] init];
-    pipelineDescriptor.label                           = @"Pipeline Descriptor";
-    pipelineDescriptor.vertexFunction                  = vertFunction;
-    pipelineDescriptor.fragmentFunction                = fragFunction;
-    pipelineDescriptor.colorAttachments[0].pixelFormat = _metalLayer.pixelFormat;
-    pipelineDescriptor.rasterSampleCount               = 4;
+    _renderPipelineDescriptor                                 = [[MTLRenderPipelineDescriptor alloc] init];
+    _renderPipelineDescriptor.label                           = @"Pipeline Descriptor";
+    _renderPipelineDescriptor.vertexFunction                  = _vertFunction;
+    _renderPipelineDescriptor.fragmentFunction                = _fragFunction;
+    _renderPipelineDescriptor.colorAttachments[0].pixelFormat = _layer.pixelFormat;
 
-    _pipelineState                  = [_device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:nil];
-    static const float vertexData[] = {-0.3f, -0.3f, +1.0f, +0.0f, +0.0f, +0.3f, -0.3f, +0.0f, +1.0f, +0.0f, +0.0f, +0.3f, +0.0f, +0.0f, +1.0f};
-    _vertexBuffer                   = [_device newBufferWithBytes:vertexData length:sizeof(vertexData) options:MTLResourceStorageModeShared];
-    _timer                          = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
+    _pipelineState            = [_gpu newRenderPipelineStateWithDescriptor:_renderPipelineDescriptor error:nil];
+    static const float data[] = {-0.3f, -0.3f, +1.0f, +0.0f, +0.0f, +0.3f, -0.3f, +0.0f, +1.0f, +0.0f, +0.0f, +0.3f, +0.0f, +0.0f, +1.0f};
+    _vertBuffer               = [_gpu newBufferWithBytes:data length:sizeof(data) options:MTLResourceStorageModeShared];
+    _timer                    = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
     return self;
 }
 
 - (void)render {
-    CFTimeInterval currentTime = CACurrentMediaTime();
-    float          elapsedTime = currentTime - _time;
+    CFTimeInterval current = CACurrentMediaTime();
+    float          elapsed = current - _time;
 
-    id<CAMetalDrawable>  drawable      = [_metalLayer nextDrawable];
-    id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
+    _drawable      = [_layer nextDrawable];
+    _commandBuffer = [_commandQueue commandBuffer];
 
-    MTLTextureDescriptor *msaaTextureDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:_metalLayer.pixelFormat
-                                                                                                     width:drawable.texture.width
-                                                                                                    height:drawable.texture.height
-                                                                                                 mipmapped:NO];
-    msaaTextureDescriptor.textureType           = MTLTextureType2DMultisample;
-    msaaTextureDescriptor.sampleCount           = 4;
-    msaaTextureDescriptor.usage                 = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-    msaaTextureDescriptor.storageMode           = MTLStorageModePrivate;
-    id<MTLTexture> msaaTexture                  = [_device newTextureWithDescriptor:msaaTextureDescriptor];
+    _renderPassDescriptor                                = [MTLRenderPassDescriptor renderPassDescriptor];
+    _renderPassDescriptor.colorAttachments[0].texture    = _drawable.texture;
+    _renderPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+    _renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
 
-    MTLRenderPassDescriptor *renderPassDescriptor           = [MTLRenderPassDescriptor renderPassDescriptor];
-    renderPassDescriptor.colorAttachments[0].texture        = msaaTexture;
-    renderPassDescriptor.colorAttachments[0].resolveTexture = drawable.texture;
-    renderPassDescriptor.colorAttachments[0].loadAction     = MTLLoadActionClear;
-    renderPassDescriptor.colorAttachments[0].clearColor     = MTLClearColorMake(0.0, 0.0, 0.0, 1.0);
-    renderPassDescriptor.colorAttachments[0].storeAction    = MTLStoreActionMultisampleResolve;
+    _renderEncoder = [_commandBuffer renderCommandEncoderWithDescriptor:_renderPassDescriptor];
+    [_renderEncoder setRenderPipelineState:_pipelineState];
+    [_renderEncoder setVertexBuffer:_vertBuffer offset:0 atIndex:0];
 
-    id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-    [renderEncoder setRenderPipelineState:_pipelineState];
-    [renderEncoder setVertexBuffer:_vertexBuffer offset:0 atIndex:0];
+    _timeBuffer = [_gpu newBufferWithBytes:&elapsed length:sizeof(elapsed) options:MTLResourceStorageModeShared];
+    [_renderEncoder setVertexBuffer:_timeBuffer offset:0 atIndex:1];
 
-    _timeBuffer = [_device newBufferWithBytes:&elapsedTime length:sizeof(elapsedTime) options:MTLResourceStorageModeShared];
-    [renderEncoder setVertexBuffer:_timeBuffer offset:0 atIndex:1];
+    [_renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+    [_renderEncoder endEncoding];
 
-    [renderEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-    [renderEncoder endEncoding];
-
-    [commandBuffer presentDrawable:drawable];
-    [commandBuffer commit];
+    [_commandBuffer presentDrawable:_drawable];
+    [_commandBuffer commit];
 }
 
 @end
