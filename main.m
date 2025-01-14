@@ -40,13 +40,14 @@ int main() {
     id<MTLBuffer> uniformBuffer = [gpu newBufferWithLength:sizeof(struct Uniforms) options:MTLResourceStorageModeShared];
     NSDate *startTime = [NSDate date];
 
-    while (1) {
+    BOOL quit = NO;
+    while (!quit) {
         NSEvent *event;
         while ((event = [application nextEventMatchingMask:NSEventMaskAny untilDate:nil inMode:NSDefaultRunLoopMode dequeue:YES])) {
             [application sendEvent:event];
             [application updateWindows];
             if ([event type] == NSEventTypeKeyDown) {
-                return 0;
+                quit = YES;
             }
         }
         
