@@ -25,7 +25,7 @@ BreakConstructorInitializersBeforeComma: false
 ColumnLimit: 150
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 DerivePointerAlignment: false
-#DisableFormat: true
+DisableFormat: true
 PointerAlignment: Right
 IndentCaseLabels: true
 IndentWidth: 4
