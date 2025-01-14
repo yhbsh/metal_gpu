@@ -1,4 +1,10 @@
-all: rect.app/Contents/rect triangle.app/Contents/triangle main.app/Contents/main
+all: texture.app/Contents/texture rect.app/Contents/rect triangle.app/Contents/triangle main.app/Contents/main
+
+texture.app/Contents/texture: texture.m texture.metal
+	@mkdir -p texture.app/Contents
+	xcrun metal -c texture.metal -o texture.air
+	xcrun metallib texture.air -o texture.app/Contents/default.metallib
+	clang texture.m -o texture.app/Contents/texture -framework Foundation -framework Cocoa -framework Metal -framework Quartz -framework MetalKit
 
 rect.app/Contents/rect: rect.m rect.metal
 	@mkdir -p rect.app/Contents
