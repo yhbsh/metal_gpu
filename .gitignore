@@ -1,4 +1,4 @@
-obj*
-triangle-metal
+triangle
+cube
 shaders.metallib
 shaders.air
