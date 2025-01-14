@@ -34,7 +34,8 @@ int main(int argc, const char *argv[]) {
     layer.pixelFormat     = MTLPixelFormatBGRA8Unorm;
     layer.framebufferOnly = YES;
 
-    id<MTLLibrary> library = [device newLibraryWithURL:[[NSURL alloc] initWithString:@"shaders.metallib"] error:&error];
+    NSString *path = [[NSBundle mainBundle] pathForResource:@"default" ofType:@"metallib"];
+    id<MTLLibrary> library = [device newLibraryWithURL:[NSURL fileURLWithPath:path] error:nil];
     if (!library) {
         NSLog(@"cannot find library");
         return 1;
