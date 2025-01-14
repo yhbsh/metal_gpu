@@ -14,6 +14,7 @@ id<MTLRenderPipelineState>   _pipelineState;
 id<MTLBuffer>                _positionsBuffer;
 id<MTLBuffer>                _colorsBuffer;
 id<MTLBuffer>                _indicesBuffer;
+id<MTLBuffer>                _timeBuffer;
 id<MTLLibrary>               _library;
 id<MTLFunction>              _vertFunction;
 id<MTLFunction>              _fragFunction;
@@ -22,12 +23,13 @@ id<MTLCommandBuffer>         _commandBuffer;
 id<MTLRenderCommandEncoder>  _renderEncoder;
 CAMetalLayer                *_layer;
 NSTimer                     *_timer;
+CFTimeInterval               _time;
 MTLRenderPipelineDescriptor *_renderPipelineDescriptor;
 MTLRenderPassDescriptor     *_renderPassDescriptor;
 
 static const uint16      indices[]   = {0, 1, 2, 1, 2, 3};
 static const simd_float4 positions[] = {
-    {-0.5, -0.5, 0.5, 1.0},
+    {-0.5, -0.5, 0.0, 1.0},
     {+0.5, -0.5, 0.0, 1.0},
     {-0.5, +0.5, 0.0, 1.0},
     {+0.5, +0.5, 0.0, 1.0},
@@ -45,6 +47,7 @@ static const simd_float4 colors[] = {
         return nil;
     }
 
+    _time         = CACurrentMediaTime();
     _gpu          = MTLCreateSystemDefaultDevice();
     _layer        = [CAMetalLayer layer];
     _layer.device = _gpu;
@@ -67,11 +70,14 @@ static const simd_float4 colors[] = {
     _colorsBuffer    = [_gpu newBufferWithBytes:colors length:sizeof(colors) options:MTLResourceStorageModeShared];
     _indicesBuffer   = [_gpu newBufferWithBytes:indices length:sizeof(indices) options:MTLResourceStorageModeShared];
 
-    _timer = [NSTimer scheduledTimerWithTimeInterval:1.0 / 30.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
+    _timer = [NSTimer scheduledTimerWithTimeInterval:1.0 / 144.0 target:self selector:@selector(render) userInfo:nil repeats:YES];
     return self;
 }
 
 - (void)render {
+    simd_float1 elapsed = CACurrentMediaTime() - _time;
+    _timeBuffer         = [_gpu newBufferWithBytes:&elapsed length:sizeof(elapsed) options:MTLResourceStorageModeShared];
+
     _drawable      = [_layer nextDrawable];
     _commandBuffer = [_commandQueue commandBuffer];
 
@@ -84,8 +90,9 @@ static const simd_float4 colors[] = {
     [_renderEncoder setRenderPipelineState:_pipelineState];
     [_renderEncoder setVertexBuffer:_positionsBuffer offset:0 atIndex:0];
     [_renderEncoder setVertexBuffer:_colorsBuffer offset:0 atIndex:1];
+    [_renderEncoder setVertexBuffer:_timeBuffer offset:0 atIndex:2];
     [_renderEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-                               indexCount:6
+                               indexCount:sizeof(indices) / sizeof(indices[0])
                                 indexType:MTLIndexTypeUInt16
                               indexBuffer:_indicesBuffer
                         indexBufferOffset:0];

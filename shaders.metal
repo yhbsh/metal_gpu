@@ -1,7 +1,6 @@
 #include <metal_stdlib>
 using namespace metal;
 
-
 struct VertexOut {
     float4 position [[position]];
     float4 color;
@@ -9,9 +8,30 @@ struct VertexOut {
 
 vertex VertexOut vertex_cube_main(uint                 id        [[vertex_id]], 
                              const device float4 *positions [[buffer(0)]],
-                             const device float4 *colors    [[buffer(1)]]) {
+                             const device float4 *colors    [[buffer(1)]],
+                             const device float  &time      [[buffer(2)]]) {
     VertexOut vout;
-    vout.position = positions[id];
+
+    float angleX = time;
+    float angleY = pow(time * 0.5, 1.5);
+
+    float4x4 rotationX = float4x4(
+        float4(+1.0, +0.0        , +0.0        , +0.0),
+        float4(+0.0, +cos(angleX), -sin(angleX), +0.0),
+        float4(+0.0, +sin(angleX), +cos(angleX), +0.0),
+        float4(+0.0, +0.0        , +0.0        , +1.0)
+    );
+
+    float4x4 rotationY = float4x4(
+        float4(+cos(angleY), +0.0, +sin(angleY), +0.0),
+        float4(+0.0        , +1.0, +0.0        , +0.0),
+        float4(-sin(angleY), +0.0, +cos(angleY), +0.0),
+        float4(+0.0        , +0.0, +0.0        , +1.0)
+    );
+
+    float4x4 matrix = rotationY * rotationX;
+
+    vout.position = matrix * positions[id];
     vout.color = colors[id];
     return vout;
 }
