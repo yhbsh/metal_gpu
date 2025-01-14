@@ -1,22 +1,23 @@
-all: run_cube
+FRAMEWORKS := -framework AppKit -framework Metal -framework QuartzCore -framework MetalKit
 
-run_cube: cube
-	./cube
+SRCS := $(wildcard *.m)
+PROGS := $(SRCS:.m=)
 
-run_triangle: triangle
-	./triangle
+METAL_SRC := $(wildcard *.metal)
+METAL_LIB := $(METAL_SRC:.metal=.metallib)
 
-triangle: shaders.metallib triangle.m
-	clang triangle.m -o triangle -framework AppKit -framework Metal -framework QuartzCore
+all: $(METAL_LIB) $(PROGS)
 
-cube: shaders.metallib cube.m
-	clang cube.m -o cube -framework AppKit -framework Metal -framework QuartzCore
+%: %.m
+	cc $< -o $@ $(FRAMEWORKS)
 
-shaders.metallib: shaders.air
-	xcrun metallib shaders.air -o shaders.metallib
+%.metallib: %.air
+	xcrun metallib $< -o $@
 
-shaders.air: shaders.metal
-	xcrun metal -c shaders.metal -o shaders.air
+%.air: %.metal
+	xcrun metal -c $< -o $@
 
 clean:
-	rm triangle cube
+	rm -f $(PROGS) *.metallib *.air
+
+.PHONY: all clean
