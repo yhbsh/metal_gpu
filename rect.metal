@@ -12,18 +12,22 @@ struct Uniforms {
 
 vertex VertexOut vert_main(uint vertexID [[vertex_id]], constant Uniforms &uniforms [[buffer(0)]]) {
     float angle = uniforms.time;
-    float4 positions[4] = {
+    float4 positions[6] = {
         float4(-0.5, -0.5, 0.0, 1.0),
         float4(-0.5,  0.5, 0.0, 1.0),
         float4( 0.5, -0.5, 0.0, 1.0),
+        float4(-0.5,  0.5, 0.0, 1.0),
         float4( 0.5,  0.5, 0.0, 1.0),
+        float4( 0.5, -0.5, 0.0, 1.0),
     };
 
-    float4 colors[4] = {
+    float4 colors[6] = {
         float4(1.0, 0.0, 0.0, 1.0),
         float4(0.0, 1.0, 0.0, 1.0),
         float4(0.0, 0.0, 1.0, 1.0),
+        float4(0.0, 1.0, 0.0, 1.0),
         float4(1.0, 0.0, 1.0, 1.0),
+        float4(0.0, 1.0, 1.0, 1.0),
     };
 
     float2x2 rotation = float2x2(cos(angle), -sin(angle),

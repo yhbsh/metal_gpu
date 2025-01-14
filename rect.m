@@ -14,7 +14,6 @@ int main() {
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     CAMetalLayer *metalLayer = [CAMetalLayer layer];
-    [window setTitle:@"WINDOW"];
     [window makeKeyAndOrderFront:nil];
     [window.contentView setLayer:metalLayer];
     [window.contentView setWantsLayer:YES];
@@ -68,7 +67,7 @@ int main() {
                 id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
                 [encoder setRenderPipelineState:pipelineState];
                 [encoder setVertexBuffer:uniformBuffer offset:0 atIndex:0];
-                [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+                [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
                 [encoder endEncoding];
                 [commandBuffer presentDrawable:drawable];
                 [commandBuffer commit];
