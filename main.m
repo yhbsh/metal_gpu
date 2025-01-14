@@ -14,7 +14,6 @@ int main() {
                                                      backing:NSBackingStoreBuffered
                                                        defer:NO];
     CAMetalLayer *metalLayer = [CAMetalLayer layer];
-    [window setTitle:@"WINDOW"];
     [window makeKeyAndOrderFront:nil];
     [window.contentView setLayer:metalLayer];
     [window.contentView setWantsLayer:YES];
