@@ -1,4 +1,10 @@
-all: texture.app/Contents/texture rect.app/Contents/rect triangle.app/Contents/triangle main.app/Contents/main
+all: video.app/Contents/video texture.app/Contents/texture rect.app/Contents/rect triangle.app/Contents/triangle main.app/Contents/main
+
+video.app/Contents/video: video.m video.metal
+	@mkdir -p video.app/Contents
+	xcrun metal -c video.metal -o video.air
+	xcrun metallib video.air -o video.app/Contents/default.metallib
+	clang video.m -o video.app/Contents/video -framework Foundation -framework Cocoa -framework Metal -framework Quartz -framework MetalKit $(shell pkg-config --cflags --libs libavformat libavcodec libswscale)
 
 texture.app/Contents/texture: texture.m texture.metal
 	@mkdir -p texture.app/Contents
